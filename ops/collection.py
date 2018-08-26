@@ -1,6 +1,4 @@
 # collection.py
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import re
 

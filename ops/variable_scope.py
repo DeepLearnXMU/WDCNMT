@@ -1,7 +1,5 @@
 # variable_scope.py
 # modified from Tensorflow's tf.variable_scope
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import contextlib
 

@@ -1,7 +1,5 @@
 # scan.py
 # a wrapper for Theano's scan
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 from collections import OrderedDict
 

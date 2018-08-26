@@ -1,7 +1,5 @@
 # name_scope.py
 # codes modified from Tensorflow's tf.name_scope
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import contextlib
 import re

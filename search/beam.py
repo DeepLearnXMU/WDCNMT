@@ -1,6 +1,4 @@
 # search.py
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import itertools
 

@@ -1,6 +1,5 @@
 #!/usr/bin/python
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
+
 import argparse
 import cPickle
 import datetime

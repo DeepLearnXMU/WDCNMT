@@ -1,7 +1,5 @@
 # function.py
 # a wrapper for Theano's function
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import theano
 

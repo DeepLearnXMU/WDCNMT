@@ -1,7 +1,5 @@
 # bleu.py
 # code modified from nltk.align.bleu
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import math
 

@@ -1,6 +1,4 @@
 # reader.py
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import os
 import tempfile

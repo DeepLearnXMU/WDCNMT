@@ -1,6 +1,4 @@
 # nn.py
-# author: Playinf
-# email: playinf@stu.xmu.edu.cn
 
 import theano
 import theano.tensor as T
