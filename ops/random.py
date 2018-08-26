@@ -1,4 +1,6 @@
 # random.py
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
 
 import theano.sandbox.rng_mrg
 

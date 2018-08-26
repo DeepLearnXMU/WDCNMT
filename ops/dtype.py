@@ -1,5 +1,7 @@
 # dtype.py
 # helper functions for dtype
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
 
 
 _ALL_DTYPES = [

@@ -1,4 +1,6 @@
 # rnnsearch.py
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
 
 import numpy
 import theano

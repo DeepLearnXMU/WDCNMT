@@ -1,5 +1,7 @@
 # initializer.py
 # used in variable, variable_scope or get_variable
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
 
 import numpy
 import theano

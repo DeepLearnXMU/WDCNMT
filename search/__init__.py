@@ -1,4 +1,6 @@
 # __init__.py
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
 
 from beam import beam
 from utils import flatten, pack_sequence_as

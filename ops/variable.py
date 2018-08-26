@@ -1,5 +1,7 @@
 # variable.py
 # managed variables
+# author: Playinf
+# email: playinf@stu.xmu.edu.cn
 
 import theano
 
