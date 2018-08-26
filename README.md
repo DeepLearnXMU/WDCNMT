@@ -19,7 +19,7 @@ To obtain vocabulary for training, run:
 
     python scripts/buildvocab.py --corpus /path/ch.train --output /path/to/ch.voc3.pkl \
     --limit 32000 --groundhog
-    python scripts/buildvocab.py --corpus /path/en.train --output /path/to/de.voc3.pkl \
+    python scripts/buildvocab.py --corpus /path/en.train --output /path/to/en.voc3.pkl \
     --limit 32000 --groundhog
 
 Similarly, vocabularies for English-French translation can be obtained in the same way.
