@@ -1,0 +1,57 @@
+alpha: 0.0005
+batch: 80
+config: null
+corpus:
+- /home/lemon/data/UM-Corpus/predata/Education.ch.final
+- /home/lemon/data/UM-Corpus/predata/Education.en.final
+decay: 0.5
+lambda: 0.2
+decoder: GruCond
+tie: 0
+deephid: 500
+delay_val: 1
+drop_tasks: false
+embdim:
+- 500
+- 500
+ext_val_script: scripts/validate-nist.sh
+finetune: false
+freq: 1000
+hidden:
+- 1000
+- 1000
+- 1000
+- 1000
+- 300
+keep_prob: 0.9
+l1_scale: null
+l2_scale: null
+limit:
+- 60
+- 60
+- 60
+maxepoch: 8
+maxhid: 500
+maxpart: 2
+model: test
+momentum: 0.0
+no_overwrite: null
+norm: 1.0
+optimizer: adam
+pfreq: null
+references:
+- /home/lemon/data/UM-Corpus/predata/Education.en.dev
+reset: false
+scale: 0.08
+seed: 1234
+sfreq: 3000
+shuffle: 1
+skip_val: null
+sort: 32
+stop: 0
+validation: /home/lemon/data/UM-Corpus/newdata/Education.ch.dev
+vfreq: 3600
+vocab:
+- /home/lemon/data/UM-Corpus/newdata/domain3ch.vocab.pkl
+- /home/lemon/data/UM-Corpus/newdata/domain3en.vocab.pkl
+
