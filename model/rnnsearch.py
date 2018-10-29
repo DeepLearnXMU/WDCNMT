@@ -9,7 +9,7 @@ import theano.tensor as T
 
 import nn
 import ops
-from bridge import map_key,domain_sensitive_attention
+from bridge import map_key,domain_sensitive_attention,attention
 from encoder import Encoder
 from decoder import DecoderGruSimple, DecoderGruCond
 from search import beam, select_nbest
@@ -32,6 +32,7 @@ class rnnsearch:
         tw2id, tid2w = tvocab
         # source and target vocabulary size
         svsize, tvsize = len(sid2w), len(tid2w)
+        dnum = option['dnum']
 
         if "scope" not in option or option["scope"] is None:
             option["scope"] = "rnnsearch"
@@ -56,7 +57,7 @@ class rnnsearch:
 
         encoder = Encoder(sedim, shdim)
         decoderType = eval("Decoder{}".format(option["decoder"]))
-        decoder = decoderType(tedim, thdim, ahdim, 2 * shdim, dim_maxout=maxdim, max_part=maxpart, dim_readout=deephid,
+        decoder = decoderType(tedim, thdim, ahdim, 2 * shdim, dnum=dnum, dim_maxout=maxdim, max_part=maxpart, dim_readout=deephid,
                               dim_domain=domaindim, feadim=feadim,
                               n_y_vocab=tvsize)
 
@@ -69,6 +70,8 @@ class rnnsearch:
             tgt_seq = T.imatrix("target_sequence")
             tgt_mask = T.matrix("target_sequence_mask")
             tag_seq = T.imatrix("domain_tag")
+            # nsrc_mask = T.set_subtensor(src_mask[T.cast(T.sum(src_mask, 0) - 1, 'int32'),
+            #                                      T.arange(src_mask.shape[1])], 0.0)
 
             with ops.variable_scope("source_embedding"):
                 source_embedding = ops.get_variable("embedding",
@@ -93,15 +96,16 @@ class rnnsearch:
             states, r_states = encoder.forward(source_inputs, src_mask)
             annotation = T.concatenate([states, r_states], 2)
 
-            # annotation = nn.dropout(annotation, keep_prob=keep_prob)
-
             with ops.variable_scope("Specific"):
                 domain_alpha = domain_sensitive_attention(annotation, src_mask, shdim * 2, domaindim)
+                # domain_alpha = attention(r_states[0], annotation, nsrc_mask,
+                #                          shdim,
+                #                          shdim * 2)
                 domain_context = T.sum(annotation * domain_alpha[:,:,None], 0)
                 dfeature = nn.feedforward(domain_context, [shdim * 2, feadim], True,
                                           activation=T.tanh, scope="feature1")
 
-                dscores = nn.feedforward(dfeature, [feadim, 4], True, activation=T.tanh, scope="score")
+                dscores = nn.feedforward(dfeature, [feadim, dnum], True, activation=T.tanh, scope="score")
                 # (batch, 2)
                 dprobs = T.nnet.softmax(dscores)
                 dpred_tag = T.argmax(dprobs, 1)
@@ -110,12 +114,15 @@ class rnnsearch:
                 dcost = T.mean(dce)
 
             share_alpha = domain_sensitive_attention(annotation, src_mask, shdim * 2, domaindim)
+            # share_alpha = attention(r_states[0], annotation, nsrc_mask,
+            #                         shdim,
+            #                         shdim * 2)
             share_context = T.sum(annotation * share_alpha[:, :, None], 0)
             sfeature = nn.feedforward(share_context, [shdim * 2, feadim], True,
                                       activation=T.tanh, scope="feature1")
 
             with ops.variable_scope("Shared"):
-                sscores = nn.feedforward(sfeature, [feadim, 4], True, activation=T.tanh, scope="score")
+                sscores = nn.feedforward(sfeature, [feadim, dnum], True, activation=T.tanh, scope="score")
                 # (batch, 2)
                 sprobs = T.nnet.softmax(sscores)
                 spred_tag = T.argmax(sprobs, 1)
@@ -184,12 +191,17 @@ class rnnsearch:
 
             with ops.variable_scope("Specific"):
                 domain_alpha = domain_sensitive_attention(annotation, src_mask, shdim * 2, domaindim)
+                # domain_alpha = attention(r_states[0], annotation, nsrc_mask,
+                #                          shdim,
+                #                          shdim * 2)
                 domain_context = T.sum(annotation * domain_alpha[:,:,None], 0)
                 dfeature = nn.feedforward(domain_context, [shdim * 2, feadim], True,
                                           activation=T.tanh, scope="feature1")
 
-
             share_alpha = domain_sensitive_attention(annotation, src_mask, shdim * 2, domaindim)
+            # share_alpha = attention(r_states[0], annotation, nsrc_mask,
+            #                         shdim,
+            #                         shdim * 2)
             share_context = T.sum(annotation * share_alpha[:,:,None], 0)
             sfeature = nn.feedforward(share_context, [shdim * 2, feadim], True,
                                           activation=T.tanh, scope="feature1")
@@ -220,12 +232,12 @@ class rnnsearch:
 
             with ops.variable_scope(decoder_scope):
                 mask = T.ones_like(prev_words, dtype=dtype)
-                next_state, context, d_context = decoder.step(prev_inputs, mask, initial_state, mapped_keys, annotation, src_mask,
+                next_state, context = decoder.step(prev_inputs, mask, initial_state, mapped_keys, annotation, src_mask,
                                                    mapped_domain_keys,domain_annotation)
                 if option["decoder"] == "GruSimple":
-                    probs = decoder.prediction(prev_inputs, initial_state, context, d_context)
+                    probs = decoder.prediction(prev_inputs, initial_state, context)
                 elif option["decoder"] == "GruCond":
-                    probs = decoder.prediction(prev_inputs, next_state, context, d_context)
+                    probs = decoder.prediction(prev_inputs, next_state, context)
 
         # encoding
         encoding_inputs = [src_seq, src_mask]
@@ -235,7 +247,7 @@ class rnnsearch:
         if option["decoder"] == "GruSimple":
             prediction_inputs = [prev_words, initial_state, annotation,
                                  mapped_keys, src_mask]
-            prediction_outputs = [probs, context, d_context]
+            prediction_outputs = [probs, context]
             predict = theano.function(prediction_inputs, prediction_outputs)
 
             generation_inputs = [prev_words, initial_state, context]

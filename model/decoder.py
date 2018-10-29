@@ -8,7 +8,7 @@ import numpy
 
 
 class Decoder:
-    def __init__(self, dim_y, dim_hid, dim_key, dim_value, n_y_vocab, *args, **kwargs):
+    def __init__(self, dim_y, dim_hid, dim_key, dim_value, dnum, n_y_vocab, *args, **kwargs):
         """
         :param dim_y: 
         :param dim_hid: dimension of decoder's hidden state 
@@ -19,6 +19,7 @@ class Decoder:
         self.dim_hid = dim_hid
         self.dim_key = dim_key
         self.dim_value = dim_value
+        self.dnum = dnum
 
     def step(self, y_prev, mask, state, keys, values, key_mask, domain_keys, domain_annot):
         """
@@ -27,7 +28,7 @@ class Decoder:
         """
         raise NotImplementedError
 
-    def prediction(self, y_emb, state, context, dcontext, keep_prob=1.0):
+    def prediction(self, y_emb, state, context, keep_prob=1.0):
         raise NotImplementedError
 
     def build_sampling(self, src_seq, src_mask, target_embedding, target_bias, keys, values, initial_state):
@@ -43,7 +44,7 @@ class Decoder:
         assert probs.ndim == 2
         idx = T.arange(y_seq.flatten().shape[0])
         ce = -T.log(probs[idx, y_seq.flatten()])
-        ce = ce.reshape(y_seq.shape) * (1 + alpha)
+        ce = ce.reshape(y_seq.shape) * (1 + alpha**2)
         ce = T.sum(ce * mask, 0)
 
         cost = T.mean(ce)
@@ -57,11 +58,11 @@ class Decoder:
         :return: 
         """
         seq = [y_emb, mask]
-        outputs_info = [initial_state, None, None]
+        outputs_info = [initial_state, None]
         non_seq = [keys, values, key_mask, domain_keys, domain_annot]
-        (states, contexts, dcontexts) = ops.scan(self.step, seq, outputs_info, non_seq)
+        (states, contexts) = ops.scan(self.step, seq, outputs_info, non_seq)
 
-        return states, contexts, dcontexts
+        return states, contexts
 
     def forward(self, y_seq, y_emb, mask, keys, key_mask, values, initial_state, domain_keys, domain_annot, tag_seq, keep_prob=1.0):
         """
@@ -76,14 +77,14 @@ class DecoderGruCond(Decoder):
     recurrence: s0, y0 -> s1
     """
 
-    def __init__(self, dim_y, dim_hid, dim_key, dim_value, dim_readout, dim_domain, feadim, n_y_vocab, *args, **kwargs):
+    def __init__(self, dim_y, dim_hid, dim_key, dim_value, dnum, dim_readout,  dim_domain, feadim, n_y_vocab, *args, **kwargs):
         """
         see `https://github.com/nyu-dl/dl4mt-tutorial/blob/master/docs/cgru.pdf`
         1. s_j^{\prime} = GRU^1(y_{j-1}, s_{j-1})
         2. c_j = att(H, s_j^{\prime})
         3. s_j = GRU^2(c_j, s_j^{\prime})
         """
-        Decoder.__init__(self, dim_y, dim_hid, dim_key, dim_value, n_y_vocab)
+        Decoder.__init__(self, dim_y, dim_hid, dim_key, dim_value, dnum, n_y_vocab)
         self.dim_readout = dim_readout
         self.n_y_vocab = n_y_vocab
         self.dim_domain = dim_domain
@@ -91,7 +92,7 @@ class DecoderGruCond(Decoder):
         # s_j^{\prime} = GRU^1(y_{j-1}, s_{j-1})
         self.cell1 = nn.rnn_cell.gru_cell([dim_y, dim_hid])
         # s_j = GRU^2(c_j, s_j^{\prime})
-        self.cell2 = nn.rnn_cell.gru_cell([[dim_value,dim_value], dim_hid])
+        self.cell2 = nn.rnn_cell.gru_cell([dim_value, dim_hid])
         self.tiescope = None
 
     def step(self, y_prev, mask, state, keys, values, key_mask, domain_keys, domain_annot):
@@ -105,10 +106,15 @@ class DecoderGruCond(Decoder):
         d_alpha = attention(state_prime, domain_keys, key_mask, self.dim_hid, self.dim_key, scope="domain_context")
         d_context = T.sum(d_alpha[:,:, None] * domain_annot, 0)
 
+        gate = nn.feedforward([state_prime, context, d_context], [[self.dim_hid, self.dim_value, self.dim_value],
+                                                                  self.dim_value], True, scope="context_gate")
+        context = gate * context + (1 - gate) * d_context
+
         # s_j = GRU^2(c_j, s_j^{\prime})
-        output, next_state = self.cell2([context,d_context], state_prime, scope="gru2")
+        output, next_state = self.cell2(context, state_prime, scope="gru2")
         next_state = (1.0 - mask) * state + mask * next_state
-        return next_state, context, d_context
+        
+        return next_state, context
 
     def build_sampling(self, src_seq, src_mask, target_embedding, target_bias, keys, values, initial_state):
         # sampling graph, this feature is optional
@@ -169,7 +175,7 @@ class DecoderGruCond(Decoder):
         align = theano.function(alignment_inputs, alignment_outputs)
         return align
 
-    def prediction(self, y_emb, state, context, dcontext, keep_prob=1.0):
+    def prediction(self, y_emb, state, context, keep_prob=1.0):
         """
         readout -> softmax
         p(y_j) \propto f(y_{j-1}, s_{j}, c_{j})
@@ -179,16 +185,22 @@ class DecoderGruCond(Decoder):
         :param keep_prob: 
         :return: 
         """
-        features = [state, y_emb, context, dcontext]
-        readout = nn.feedforward(features, [[self.dim_hid, self.dim_y, self.dim_value, self.dim_value], self.dim_readout], True,
+        features = [state, y_emb, context]
+        readout = nn.feedforward(features, [[self.dim_hid, self.dim_y, self.dim_value], self.dim_readout], True,
                                  activation=T.tanh,
                                  scope="readout")
 
         if keep_prob < 1.0:
             readout = nn.dropout(readout, keep_prob=keep_prob)
 
-        logits = nn.linear(readout, [self.dim_readout, self.n_y_vocab], True,
-                           scope="logits")
+        with ops.variable_scope(self.tiescope, reuse=True):
+            target_embedding = ops.get_variable("embedding",
+                                                [self.n_y_vocab, self.dim_readout])
+            target_embedding = target_embedding.T
+            logits = T.dot(readout, target_embedding)
+
+        # logits = nn.linear(readout, [self.dim_readout, self.n_y_vocab], True,
+        #                    scope="logits")
         if logits.ndim == 3:
             new_shape = [logits.shape[0] * logits.shape[1], -1]
             logits = logits.reshape(new_shape)
@@ -202,14 +214,14 @@ class DecoderGruCond(Decoder):
         y_shifted = T.set_subtensor(y_shifted[1:], y_emb[:-1])
         y_emb = y_shifted
         # feed
-        states, contexts, dcontexts = Decoder.scan(self, y_emb, mask, keys, key_mask, values, initial_state, domain_keys, domain_annot)
+        states, contexts = Decoder.scan(self, y_emb, mask, keys, key_mask, values, initial_state, domain_keys, domain_annot)
 
         with ops.variable_scope("DSAdec"):
-            # newmask = T.set_subtensor(mask[T.arange(mask.shape[0]),T.cast(T.sum(mask,0)-1,'int32')],
-            #                                       0.0).reshape(mask.shape[0], mask.shape[1])
-            # newmask[T.arange(states.shape[0]),T.sum(mask,0)-1] = 0.0
-            domain_alpha = domain_sensitive_attention(states, mask, self.dim_hid, self.dim_domain)
-
+            newmask = T.set_subtensor(mask[T.cast(T.sum(mask, 0) - 1, 'int32'), T.arange(mask.shape[1])], 0.0)
+            # domain_alpha = domain_sensitive_attention(states, newmask, self.dim_hid, self.dim_domain)
+            domain_alpha = attention(states[-1], states, newmask,
+                                     self.dim_hid,
+                                     self.dim_hid)
             domain_states = states * domain_alpha[:,:,None]
 
             # batch * (shdim * 2)
@@ -218,7 +230,7 @@ class DecoderGruCond(Decoder):
             feature = nn.feedforward(domain_context, [self.dim_hid, self.feadim], True,
                                       activation=T.tanh, scope="feature")
 
-            dscores = nn.feedforward(feature, [self.feadim, 4], True, activation=T.tanh, scope="score")
+            dscores = nn.feedforward(feature, [self.feadim, self.dnum], True, activation=T.tanh, scope="score")
             # (batch, 4)
             dprobs = T.nnet.softmax(dscores)
             pred_tag = T.argmax(dprobs, 1)
@@ -227,7 +239,7 @@ class DecoderGruCond(Decoder):
             domaincost = T.mean(dce)
 
         # p(y_j) \propto f(y_{j-1}, s_{j}, c_{j})
-        probs = self.prediction(y_emb, states, contexts, dcontexts, keep_prob)
+        probs = self.prediction(y_emb, states, contexts, keep_prob)
 
         # compute cost
         cost, snt_cost = self.get_cost(y_seq, mask, probs, domain_alpha)

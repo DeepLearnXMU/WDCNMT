@@ -250,6 +250,10 @@ def parseargs_train(argv):
     data.add_argument('--reset', action='store_true', help=msg)
     msg = 'do not overwrite the previous model'
     data.add_argument('--no-overwrite', type=int, help=msg)
+    msg = 'num of domains'
+    data.add_argument('--dnum', type=int, help=msg)
+    msg = 'vocab of domains'
+    data.add_argument('--dvocab', nargs="+", help=msg)
 
     network = parser.add_argument_group('network parameters')
     msg = 'decoder version, GruCond for dl4nmt and GruSimple for groundhog'
@@ -484,6 +488,8 @@ def default_option():
     # training corpus and vocabulary
     option["corpus"] = None
     option["vocab"] = None
+    option["dnum"] = 2
+    option["dvocab"] = None
 
     # model parameters
     option["embdim"] = [620, 620]
@@ -574,11 +580,6 @@ def override(opt1, opt2):
         # append a new symbol "<eos>" to vocabulary, it is not necessary
         # because we can reuse "</s>" symbol in vocabulary
         # but here we retain compatibility with GroundHog
-        svocab['<2in>'] = len(isvocab)
-        isvocab[len(isvocab)] = '<2in>'
-
-        svocab['<2out>'] = len(isvocab)
-        isvocab[len(isvocab)] = '<2out>'
 
         svocab[opt1["eos"]] = len(isvocab)
         tvocab[opt1["eos"]] = len(itvocab)
@@ -612,6 +613,8 @@ def print_option(option):
     print "pfreq:", option["pfreq"]
     print "seed:", option["seed"]
     print "overwrite:", not option["no_overwrite"]
+    print "dnum", option["dnum"]
+    print "dvocab", option["dvocab"]
 
     print "\n[corpus]"
     print "corpus:", option["corpus"]
@@ -886,6 +889,13 @@ def train(args):
 
     register_killer()
 
+    tagvocab = {}
+    for idx, d in enumerate(option["dvocab"]):
+        tagvocab[d] = idx
+
+    if len(tagvocab) != option["dnum"]:
+        raise ValueError('length of domain vocab %f not equal to domain num %f!' % (len(tagvocab), option["dnum"]))
+
     try:
         while progress.epoch < maxepoch:
             epc = progress.epoch
@@ -896,8 +906,6 @@ def train(args):
                 # data = _stream.next()
                 xdata, xmask = convert_data(data[0], svocab, unk_sym, eos_sym)
                 ydata, ymask = convert_data(data[1], tvocab, unk_sym, eos_sym)
-                tagvocab = {"Laws":0, "Spoken":1, "Thesis":2, "News":3}
-                # tagvocab = {"EMEA": 0, "Europarl": 1, "News": 2}
                 tag = convert_tag(data[2], tagvocab)
 
                 t1 = time.time()
@@ -928,9 +936,6 @@ def train(args):
                     for ddata in dstream:
                         txdata, txmask = convert_data(ddata[0], svocab, unk_sym, eos_sym)
                         tydata, tymask = convert_data(ddata[1], tvocab, unk_sym, eos_sym)
-
-                        tagvocab = {"Laws":0, "Spoken":1, "Thesis":2, "News":3}
-                        # tagvocab = {"EMEA": 0, "Europarl": 1, "News": 2}
                         txtag = convert_tag(ddata[2], tagvocab)
                         dtag_pred, stag_pred = model.tag_predict(txdata, txmask)
                         txtag = txtag[0]
@@ -990,9 +995,9 @@ def train(args):
                 progress.toc()
             print "--------------------------------------------------"
             progress.tic()
-            # if option["validation"] and option["references"]:
-            #     progress.add_valid(option['scope'], option['validation'], ref_stem, ext_val_script, __file__, option,
-            #                        modelname, bestname, serialize)
+            if option["validation"] and option["references"]:
+                progress.add_valid(option['scope'], option['validation'], ref_stem, ext_val_script, __file__, option,
+                                   modelname, bestname, serialize)
             print "--------------------------------------------------"
 
             progress.toc()
