@@ -24,7 +24,7 @@ To obtain vocabulary for training, run:
 
 Similarly, vocabularies for English-French translation can be obtained in the same way.
 
-And also, it's preferred, but not required to initialize encoder-backward decoder component with pretrained parameters in the proposed model of this work.
+And also, it's required to initialize the pretrained parameters in the proposed model of this work.
 
 ### Training
 
