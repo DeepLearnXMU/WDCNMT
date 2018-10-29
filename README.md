@@ -64,7 +64,7 @@ For Chinese-English experiment, do the following:
     --delay-val 1 \
     > log.chen 2>&1 &
 
-The training procedure continues about 2 days On a single Nvidia Titan x GPU.
+The training procedure continues about 1.5 days On a single Nvidia Titan x GPU.
 
 
 ### Evaluation
