@@ -37,6 +37,8 @@ For Chinese-English experiment, do the following:
 	/path/ch.test \
 	/path/en.test \
 	/path/tag.test \
+	--dnum 4 \
+	--dvocab Laws News Spoken Thesis \
     --vocab /path/ch.voc3.pkl /path/en.voc3.pkl \
     --lambda 0.1 \
     --ext-val-script scripts/validate-zhen.sh \
